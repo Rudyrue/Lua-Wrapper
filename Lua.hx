@@ -12,16 +12,11 @@ class Lua {
 	public var name(default, null):String;
 	public var active:Bool = true;
 
-	public function new(_name:String, ?startPreset:Bool = true, ?startExecute:Bool = true) {
+	public function new(_name:String, ?startExecute:Bool = true) {
 		this.name = _name;
 
 		this.file = LuaL.newstate();
 		LuaL.openlibs(file);
-
-		
-		if (startPreset) {
-			// add shit here
-		}
 
 		if (startExecute) execute();
 	}
