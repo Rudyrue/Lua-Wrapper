@@ -46,8 +46,10 @@ class Lua {
 	public function set(name:String, value:Dynamic) {
 		if (!active) return;
 
-		Convert.toLua(file, value);
-		Lua.setglobal(file, name);
+		if (Type.typeof(value) != TFunction) {
+			Convert.toLua(file, value);
+			Lua.setglobal(file, name);
+		} else Lua_helper.add_callback(file, name, value);
 	}
 
 	public function call(name:String, ?args:Array<Dynamic>):Dynamic {
