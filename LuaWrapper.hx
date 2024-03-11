@@ -29,6 +29,8 @@ class LuaWrapper {
 
 	public function execute() {
 		try {
+			executed = true;
+			
 			var isString:Bool = !sys.FileSystem.exists(name);
 			var result:Dynamic = null;
 
