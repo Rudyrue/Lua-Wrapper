@@ -1,29 +1,35 @@
 package;
 
-import llua.*;
+import llua.Lua.Lua_helper;
+import llua.LuaL;
+import llua.State;
+import llua.Convert;
 import llua.Lua;
 
-import sys.FileSystem;
+import Type.ValueType;
 
 using StringTools;
 
-class Lua {
+class LuaWrapper {
 	public var file(default, null):State;
 	public var name(default, null):String;
 	public var active:Bool = true;
 
-	public function new(_name:String, ?startExecute:Bool = true) {
-		this.name = _name;
+	public var executed(default, null):Bool = false;
 
+	public function new(_name:String, ?startExecute:Bool = true) {
 		this.file = LuaL.newstate();
-		LuaL.openlibs(file);
+		LuaL.openlibs(this.file);
+		Lua.init_callbacks(this.file);
+
+		this.name = _name.trim();
 
 		if (startExecute) execute();
 	}
 
 	public function execute() {
 		try {
-			final isString:Bool = !FileSystem.exists(name);
+			var isString:Bool = !sys.FileSystem.exists(name);
 			var result:Dynamic = null;
 
 			if (!isString) result = LuaL.dofile(file, name);
@@ -31,42 +37,50 @@ class Lua {
 
 			var resultStr:String = Lua.tostring(file, result);
 			if (resultStr != null && result != 0) {
-				trace(resultStr);
+				Sys.println('ERROR: $resultStr');
 				destroy();
 				return;
 			}
 
 			if (isString) name = 'unknown';
-		} catch(e:Dynamic) {
-			trace(e);
-			return;
-		}
+		} catch(e:Dynamic) trace(e);
 	}
 
-	public function set(name:String, value:Dynamic) {
-		if (!active) return;
+	public function set(_name:String, value:Dynamic) {
+		if (!active || this.file == null) return;
 
 		if (Type.typeof(value) != TFunction) {
 			Convert.toLua(file, value);
-			Lua.setglobal(file, name);
-		} else Lua_helper.add_callback(file, name, value);
+			Lua.setglobal(file, _name);
+		} else Lua_helper.add_callback(file, _name, value);
 	}
 
-	public function call(name:String, ?args:Array<Dynamic>):Dynamic {
-		if (!active) return null;
+	public function call(_name:String, ?args:Array<Dynamic>):Dynamic {
+		if (!active || file == null) return null;
 
-		if (args == null) args = [];
+		args ??= [];
+
+		if (!executed) execute();
 
 		try {
-			Lua.getglobal(file, name);
+			Lua.getglobal(file, _name);
 			var type:Int = Lua.type(file, -1);
 
-			for (i in 0...args.length) Convert.toLua(file, args[i]);
+			if (type != Lua.LUA_TFUNCTION) {
+				if (type > Lua.LUA_TNIL)
+					Sys.println('ERROR ($_name): attempt to call a $type value');
+
+				Lua.pop(file, 1);
+				return null;
+			}
+
+			for (arg in args) Convert.toLua(file, arg);
 			var status:Int = Lua.pcall(file, args.length, 1, 0);
 
+			// Checks if it's not successful, then show a error.
 			if (status != Lua.LUA_OK) {
 				var error:String = getErrorMessage(status);
-				Sys.println('ERROR ($name): $error');
+				Sys.println('ERROR ($_name): $error');
 				return null;
 			}
 
@@ -74,18 +88,19 @@ class Lua {
 			var result:Dynamic = cast Convert.fromLua(file, -1);
 
 			Lua.pop(file, 1);
+			if (!active) destroy();
 			return result;
-		} catch (e:Dynamic) {
-			trace(e);
-			return null;
 		}
+		catch (e:Dynamic) trace(e);
+
+		return null;
 	}
 
 	public function getErrorMessage(status:Int):String {
+		if (!active) return null;
+
 		var v:String = Lua.tostring(file, -1);
 		Lua.pop(file, 1);
-
-		trace(v);
 
 		if (v != null) v = v.trim();
 		if (v == null || v == "") {
@@ -98,12 +113,11 @@ class Lua {
 		}
 
 		return v;
-		return null;
 	}
 
 	public function destroy() {
-		file = null;
-		active = false;
+		Lua.close(this.file);
+		this.file = null;
 		name = null;
 	}
 }
