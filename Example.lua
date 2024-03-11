@@ -1,1 +1,1 @@
-p
+print(test)
