@@ -39,7 +39,7 @@ class LuaWrapper {
 
 			var resultStr:String = Lua.tostring(file, result);
 			if (resultStr != null && result != 0) {
-				Sys.println('ERROR: $resultStr');
+				Sys.println('Lua parsing error: $resultStr');
 				destroy();
 				return;
 			}
