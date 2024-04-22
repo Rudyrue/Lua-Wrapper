@@ -1,4 +1,4 @@
-package;
+package scripting;
 
 import llua.Lua.Lua_helper;
 import llua.LuaL;
@@ -30,7 +30,7 @@ class LuaWrapper {
 	public function execute() {
 		try {
 			executed = true;
-			
+
 			var isString:Bool = !sys.FileSystem.exists(name);
 			var result:Dynamic = null;
 
@@ -45,7 +45,7 @@ class LuaWrapper {
 			}
 
 			if (isString) name = 'unknown';
-		} catch(e:Dynamic) trace(e);
+		} catch(e:Dynamic) Sys.println('Lua error: $e');
 	}
 
 	public function set(_name:String, value:Dynamic) {
@@ -55,6 +55,17 @@ class LuaWrapper {
 			Convert.toLua(file, value);
 			Lua.setglobal(file, _name);
 		} else Lua_helper.add_callback(file, _name, value);
+	}
+
+	public function get(variable:String):Dynamic {
+		if (!active || file == null) return null;
+
+		Lua.getglobal(file, variable);
+		var result:Dynamic = Convert.fromLua(file, -1);
+		Lua.pop(file, 1);
+
+		if (result == 'true' || result == 'false') return result == 'true';
+		return result;
 	}
 
 	public function call(_name:String, ?args:Array<Dynamic>):Dynamic {
@@ -69,8 +80,7 @@ class LuaWrapper {
 			var type:Int = Lua.type(file, -1);
 
 			if (type != Lua.LUA_TFUNCTION) {
-				if (type > Lua.LUA_TNIL)
-					Sys.println('ERROR ($_name): attempt to call a $type value');
+				if (type > Lua.LUA_TNIL) Sys.println('Lua error ($_name): attempt to call a $type value');
 
 				Lua.pop(file, 1);
 				return null;
@@ -82,7 +92,7 @@ class LuaWrapper {
 			// Checks if it's not successful, then show a error.
 			if (status != Lua.LUA_OK) {
 				var error:String = getErrorMessage(status);
-				Sys.println('ERROR ($_name): $error');
+				Sys.println('Lua error ($_name): $error');
 				return null;
 			}
 
@@ -92,8 +102,7 @@ class LuaWrapper {
 			Lua.pop(file, 1);
 			if (!active) destroy();
 			return result;
-		}
-		catch (e:Dynamic) trace(e);
+		} catch (e:Dynamic) Sys.println('Lua error: $e');
 
 		return null;
 	}
@@ -106,20 +115,20 @@ class LuaWrapper {
 
 		if (v != null) v = v.trim();
 		if (v == null || v == "") {
-			switch (status) {
-				case Lua.LUA_ERRRUN: return "Runtime Error";
-				case Lua.LUA_ERRMEM: return "Memory Allocation Error";
-				case Lua.LUA_ERRERR: return "Critical Error";
+			return switch (status) {
+				case Lua.LUA_ERRRUN: 'Runtime Error';
+				case Lua.LUA_ERRMEM: 'Memory Allocation Error';
+				case Lua.LUA_ERRERR: 'Critical Error';
+				case _: 'Unknown Error';
 			}
-			return "Unknown Error";
 		}
 
 		return v;
 	}
 
 	public function destroy() {
-		Lua.close(this.file);
-		this.file = null;
+		Lua.close(file);
+		file = null;
 		name = null;
 	}
 }
